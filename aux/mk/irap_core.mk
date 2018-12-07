@@ -238,7 +238,7 @@ endif
 #************************
 #Version and license info
 pname=IRAP
-version=1.0.0b
+version=$(shell cat $(IRAP_DIR)/version)
 contact=Developed by Nuno Fonseca (authorname (at) acm.org)
 license=This pipeline is distributed  under the terms of the GNU General Public License 3
 
@@ -487,7 +487,7 @@ gtf_file_dir:=$(abspath $(data_dir)/reference/$(species))
 gtf_file_abspath:=$(abspath $(gtf_file_dir)/$(subst .gz,,$(gtf_file)))
 
 
-$(info *       gtf_file  = $(gtf_file))
+$(info *	gtf_file  = $(gtf_file))
 $(call file_exists,$(gtf_file_dir)/$(gtf_file))
 
 DEXSEQ_GFF:=$(gtf_file_abspath).DEXSeq.gff
@@ -524,6 +524,8 @@ user_trans_biotypes?=protein_coding|IG_([a-zA-Z0-9]+)_gene|TR_([a-zA-Z0-9]+)_gen
 user_trans?=cdna
 ifeq ($(user_trans),cdna)
 trans_abspath:=$(cdna_file_abspath)
+# file should exist
+$(call file_exists,$(trans_abspath))
 else
 ## auto
 trans_abspath:=$(patsubst %.gtf,%.trans.irap.fa,$(gtf_file_abspath))
@@ -596,7 +598,7 @@ endif
 $(info * Currently spikeins are not used while performing differential expression analysis)
 endif
 
-$(info *       Transcripts = $(trans_abspath))
+$(info *	Transcripts = $(trans_abspath))
 
 gtf_file_basename:=$(notdir $(gtf_file_abspath))
 
@@ -628,7 +630,7 @@ gff3_file_abspath:=$(subst .gz,,$(gff3_file))
 endif
 
 gff3_file:=$(notdir $(gff3_file_abspath))
-$(info *       gff3_file  = $(gff3_file_abspath))
+$(info *	gff3_file  = $(gff3_file_abspath))
 
 
 
@@ -653,6 +655,17 @@ endif
 
 # dry_run?
 dry_run=$(findstring n,$(firstword $(MAKEFLAGS)))
+
+# reduce/do not check for dependencies if nocheck is passed as a target
+phony_targets+=nocheck
+nocheck:
+no_deps_check=$(findstring nocheck,$(TARGETS))
+check_files=
+ifeq ($(no_deps_check),nocheck)
+check_deps=
+#$(foreach f,$(1),$(call file_exists,$f))
+check_files=$(foreach f,$(1),$(call file_exists,$f))
+endif
 
 # 
 ifeq ($(TARGETS),all)
@@ -696,11 +709,14 @@ ifneq ($(se),)
  #$(foreach l,$(se),$(info $(l)=$($(l)))) 
  # check if fastq file is in a different directory
  $(foreach l,$(se),$(eval $(l)_dir=$(call check_libdir_ok,$(l))))
- $(foreach l,$(se),$(eval $(l)_strand=$(call check_libstrand_ok,$(l)))) 
 # read group id
  $(foreach l,$(se),$(eval $(l)_rgid=$(call check_rgid_ok,$(l)))) 
 # sam header (may/should include @RG)
  $(foreach l,$(se),$(eval $(l)_shl=$(call check_sheader_ok,$(l)))) 
+
+ifneq ($(no_deps_check),nocheck)
+
+ $(foreach l,$(se),$(eval $(l)_strand=$(call check_libstrand_ok,$(l)))) 
  #$(foreach l,$(se),$(info $(l)_dir=$($(l)_dir)))
  #$(foreach l,$(se),$(info $(l)_dir=$($(l)_dir)))
  #$(foreach l,$(se),$(info $(l)_dir=$(call check_libdir_ok,$(l))))
@@ -709,6 +725,7 @@ ifneq ($(se),)
  $(foreach l,$(se),$(call check_param_ok,$(l)_qual))
  $(foreach l,$(se),$(foreach bc,known_umi_file known_cells_file index1 index2 index3 umi_read umi_offset umi_size cell_read cell_offset cell_size sample_read sample_offset sample_size read1_offset read2_offset read1_size read2_size sample_name,$(eval $(l)_$(bc)=$(call check_bc_value_ok,$(l),$(bc)))))
  ifile_given=1
+endif
 endif
 endif
 # PE files (libraries)
@@ -734,11 +751,13 @@ ifneq ($(pe),)
  set_rs_list=$(eval rs_list+= $($(1)))
  $(foreach l,$(pe),$(call check_pe_libname_ok,$(l)))
  $(foreach l,$(pe),$(eval $(l)_dir=$(call check_libdir_ok,$(l))))
- $(foreach l,$(pe),$(eval $(l)_strand=$(call check_libstrand_ok,$(l))))
 # read group id
- $(foreach l,$(pe),$(eval $(l)_rgid=$(call check_rgid_ok,$(l)))) 
+ $(foreach l,$(pe),$(eval $(l)_rgid=$(call check_rgid_ok,$(l))))
 # sam header lines (may/should include @RG)
  $(foreach l,$(pe),$(eval $(l)_shl=$(call check_sheader_ok,$(l)))) 
+ifneq ($(no_deps_check),nocheck)
+ $(foreach l,$(pe),$(eval $(l)_strand=$(call check_libstrand_ok,$(l))))
+
  #$(foreach l,$(pe),$(info $(l)_dir=$($(l)_dir)))
  $(foreach l,$(pe),$(call check_param_ok,$(l)_sd))
  $(foreach l,$(pe),$(call check_param_ok,$(l)_ins))
@@ -750,24 +769,27 @@ ifneq ($(pe),)
  ifile_given=1
 endif
 endif
-
-all_fq_files:=$(all_pe_files) $(all_se_files)
-nfqfiles:=$(words $(all_fq_files))
-nfqfilesu:=$(words $(sort $(all_fq_files)))
-
-ifndef skip_lib_validation
-ifneq ($(nfqfiles),$(nfqfilesu))
-$(call p_error,Some of the libraries provided in se and/or pe have the same filename)
 endif
+
+
+ifneq ($(no_deps_check),nocheck)
+ all_fq_files:=$(all_pe_files) $(all_se_files)
+ nfqfiles:=$(words $(all_fq_files))
+ nfqfilesu:=$(words $(sort $(all_fq_files)))
+
+#
+ ifndef skip_lib_validation
+  ifneq ($(nfqfiles),$(nfqfilesu))
+   $(call p_error,Some of the libraries provided in se and/or pe have the same filename)
+  endif
 #$(call p_info,has_stranded_data=$(has_stranded_data))
 
-ifndef ifile_given
-$(info *	pe parameter or se parameter should be defined and non-empty)
+   ifndef ifile_given
+   $(info *	pe parameter or se parameter should be defined and non-empty)
+   endif
+  endif
+ endif
 endif
-endif
-
-endif
-
 #***********
 # Contrasts
 #***********
@@ -831,22 +853,25 @@ endif
 # ex. technical.replicates=SE1,SE2;PE1,PE3,PE4;SE3
 # means that there are two groups of tech. replicates (separated by;), group 1 composed by SE1 and SE2  and group2 composed by PE1,PE3 and PE4, SE3 does not have tech. replicates
 ifndef technical_replicates
-technical_replicates=
+ technical_replicates=
  $(info *	technical_replicates=NONE)
 else
- $(info *	technical_replicates=$(technical_replicates))
- # validate the libraries names
- comma=,
- quote="
- $(foreach  l,$(subst $(quote), ,$(subst $(comma), ,$(subst ;, ,$(technical_replicates)))),$(call check_param_ok,$(strip $(l))))
+ ifeq ($(no_deps_check),nocheck)
+  $(info *       technical_replicates= skipping checks)
+ else
+  $(info *	technical_replicates=$(technical_replicates))
+  # validate the libraries names
+  comma=,
+  quote="
+  $(foreach  l,$(subst $(quote), ,$(subst $(comma), ,$(subst ;, ,$(technical_replicates)))),$(call check_param_ok,$(strip $(l))))
 #"
 ## check - should be improved...
-num_tr=$(words $(sort $(subst $(quote), ,$(subst $(comma), ,$(subst ;, ,$(technical_replicates))))))
-num_libs=$(words $(sort $(se) $(pe)))
+  num_tr=$(words $(sort $(subst $(quote), ,$(subst $(comma), ,$(subst ;, ,$(technical_replicates))))))
+  num_libs=$(words $(sort $(se) $(pe)))
 
 ifdef tr_validation
-ifneq ($(num_tr),$(num_libs))
-$(error technical_replicates should include all libs in se and pe: found $(num_tr) labels but expected $(num_libs))
+ ifneq ($(num_tr),$(num_libs))
+  $(error technical_replicates should include all libs in se and pe: found $(num_tr) labels but expected $(num_libs))
 endif
 ## technical replicate names 
 ifndef technical_replicates_labels
@@ -868,7 +893,7 @@ $(info *	number of technical replicate groups/labels=$(ng1))
 endif
 
 
-
+endif
 #####################
 # Other Optional parameters
 #####################
@@ -885,15 +910,14 @@ $(info *	rnaseq_type=$(rnaseq_type))
 
 ifeq ($(rnaseq_type),sc)
 ## single cell protocol
-SUPPORTED_SCP:=none smart-seq2 smart-seq smart drop-seq 10xV1 10xV2 10xV1a
+SUPPORTED_SCP:=none smart-seq2 smart-seq smart drop-seq 10xV1 10xV2 10xV1a 
+$(info *	sc_protocol=$(sc_protocol))
 
 # drop-seq 10x
 ifeq (,$(filter $(sc_protocol),$(SUPPORTED_SCP)))
 $(call p_info,[ERROR] Invalid sc_protocol - valid values are $(SUPPORTED_SCP))
 $(error Invalid sc_protocol)
 endif
-$(info *	sc_protocol=$(sc_protocol))
-
 endif
 
 ################################################################
@@ -1888,7 +1912,7 @@ STAGE1_S_TARGETS?=
 
 ifneq ($(mapper),none)
 
-bam_files:=$(foreach p,$(pe), $(call lib2bam_folder,$(p))$(p).pe.hits.byname.bam) $(foreach s,$(se), $(call lib2bam_folder,$(s))$(s).se.hits.bam)
+bam_files:=$(foreach p,$(pe), $(call lib2bam_folder,$(p))$(p).pe.hits.bam) $(foreach s,$(se), $(call lib2bam_folder,$(s))$(s).se.hits.bam)
 STAGE2BYNAME_OUT_FILES:=$(subst .hits.bam,.hits.byname.bam,$(bam_files))
 
 else
@@ -1905,7 +1929,7 @@ WAVE3_p_TARGETS+=$(subst .hits.bam,.hits.bytag_$(CELL_TAG).bam,$(bam_files))
 endif
 
 
-
+$(call p_info, Loading modules...)
 ################################################################################
 # Load extra code
 # shared code
@@ -1954,6 +1978,7 @@ endif
 # Atlas (atlas specific stuff)
 include $(irap_path)/../aux/mk/irap_atlas.mk
 
+$(call p_info, Loading modules complete)
 # Check if the options provided are valid
 ifeq (invalid,$(shell irap_paths $(mapper) $(quant_method) $(quant_norm_tool) $(quant_norm_method) $(de_method) $(transcript_de_method) $(exon_de_method) $(gse_tool) $(has_stranded_data) $(rnaseq_type) $(sc_protocol)))
   $(error invalid combination mapper:$(mapper) -> quant_method:$(quant_method) -> quant_norm method:$(quant_norm_method) quant_norm_tool:$(quant_norm_tool) -> de_method:$(de_method) transcriptDE:$(transcript_de_method) exonDE:$(exon_de_method) rnaseq_type:$(rnaseq_type) sc_protocol:$(sc_protocol) for the given data)
@@ -2169,6 +2194,10 @@ endef
 # fail if file needs to be generated
 %.cdna.fa:
 	$(call p_error,Missing cdna file $@)
+
+%.cdna.all.fa:
+	$(call p_error,Missing cdna file $@)
+
 
 %.mapping_trans.tsv: %.gtf
 	irap_gtf2mapping.pl --gtf $< --feature transcript > $@.tmp && mv $@.tmp $@

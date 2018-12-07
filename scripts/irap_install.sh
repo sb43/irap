@@ -23,8 +23,6 @@ install=all
 IRAP_DIR1=
 SRC_DIR=
 
-IRAP_VERSION=1.0.1
-
 
 #
 USE_CACHE=y
@@ -457,9 +455,9 @@ PICARD_FILE=picard-tools-$PICARD_VERSION.zip
 PICARD_URL=http://sourceforge.net/projects/picard/files/picard-tools/$PICARD_VERSION/$PICARD_FILE/download
 
 ## 1.6.0 -> 1.6.2
-FEATURECOUNTS_VERSION=1.6.2
-FEATURECOUNTS_FILE=subread-$FEATURECOUNTS_VERSION-Linux-x86_64.tar.gz
-FEATURECOUNTS_URL=https://sourceforge.net/projects/subread/files/subread-$FEATURECOUNTS_VERSION/$FEATURECOUNTS_FILE/download
+FeatureCounts_VERSION=1.6.2
+FEATURECOUNTS_FILE=subread-$FeatureCounts_VERSION-Linux-x86_64.tar.gz
+FEATURECOUNTS_URL=https://sourceforge.net/projects/subread/files/subread-$FeatureCounts_VERSION/$FEATURECOUNTS_FILE/download
 
 fastq_utils_VERSION=0.16.3
 fastq_utils_FILE=$fastq_utils_VERSION.tar.gz
@@ -2120,7 +2118,7 @@ function featurecounts_install {
     pinfo "Installing subread/feature counts..."
     download_software FEATURECOUNTS
     tar xzvf $FEATURECOUNTS_FILE
-    mv subread-$FEATURECOUNTS_VERSION-Linux-x86_64/bin/* $BIN_DIR
+    mv subread-$FeatureCounts_VERSION-Linux-x86_64/bin/* $BIN_DIR
     pinfo "FeatureCounts installed"    
 }
 
@@ -2223,7 +2221,13 @@ else
 fi
 
 # 
+if [ ! -e $SRC_DIR/version ]; then
+    echo "ERROR: iRAP's version file $SRC_DIR/version not found"
+    exit 1
+fi
+IRAP_VERSION=$(cat $SRC_DIR/version)
 pinfo "iRAP $IRAP_VERSION"
+
 # Check if env is available
 DEF_ENV="/usr/bin/env"
 ENV_FP=$DEF_ENV
@@ -2245,8 +2249,8 @@ check_dependencies
 # Full path
 pinfo "Checking paths..."
 #IRAP_DIR=$(realpath -f "$IRAP_DIR")
-IRAP_DIR=$(readlink -f "$IRAP_DIR")
 SRC_DIR=$(readlink -f "$SRC_DIR")
+IRAP_DIR=$(readlink -f "$IRAP_DIR")
 pinfo "Checking paths...done."
 #############################################
 # print a few variables to help troubleshooting
